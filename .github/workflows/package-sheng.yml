@@ -56,11 +56,13 @@ jobs:
       - name: Install build tools
         run: |
           brew install dtc llvm lld cmake mtools blacktop/tap/ipsw glslang spirv-tools bison flex
+          echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
           echo "/opt/homebrew/opt/bison/bin" >> "$GITHUB_PATH"
           echo "/opt/homebrew/opt/flex/bin" >> "$GITHUB_PATH"
-          export PATH="/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:$PATH"
+          export PATH="/opt/homebrew/bin:/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:$PATH"
           bison --version | head -n 1
           flex --version | head -n 1
+          which ipsw
           ok=1
           for t in clang xcodebuild make git ninja cmake dtc fdtget fdtput aea compression_tool \
                    mformat mcopy ipsw glslangValidator bison flex; do
@@ -85,7 +87,6 @@ jobs:
         env:
           UNIXNU_UNIQUE_CHIP_ID: ${{ inputs.unique_chip_id || secrets.UNIXNU_UNIQUE_CHIP_ID }}
           GITHUB_TOKEN: ${{ github.token }}
-          PATH: /opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
         run: |
           set +e
           scripts/package.sh --os "${{ inputs.os }}" --uefi ../uefi-sheng
