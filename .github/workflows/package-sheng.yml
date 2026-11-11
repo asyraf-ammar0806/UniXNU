@@ -55,7 +55,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install dtc llvm lld cmake mtools blacktop/tap/ipsw glslang spirv-tools bison flex shaderc
+          brew install dtc llvm lld cmake mtools blacktop/tap/ipsw glslang spirv-tools bison flex shaderc unifdef
           echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
           echo "/opt/homebrew/opt/bison/bin" >> "$GITHUB_PATH"
           echo "/opt/homebrew/opt/flex/bin" >> "$GITHUB_PATH"
@@ -67,7 +67,7 @@ jobs:
           which spirv-val
           ok=1
           for t in clang xcodebuild make git ninja cmake dtc fdtget fdtput aea compression_tool \
-                   mformat mcopy ipsw glslangValidator bison flex glslc spirv-val; do
+                   mformat mcopy ipsw glslangValidator bison flex glslc spirv-val unifdef; do
             command -v "$t" >/dev/null || { echo "missing tool: $t"; ok=0; }
           done
           for t in lld-link llvm-lib llvm-rc llvm-nm llvm-objcopy; do
