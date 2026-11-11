@@ -81,7 +81,29 @@ jobs:
           UNIXNU_UNIQUE_CHIP_ID: ${{ inputs.unique_chip_id || secrets.UNIXNU_UNIQUE_CHIP_ID }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          set +e
           scripts/package.sh --os "${{ inputs.os }}" --uefi ../uefi-sheng
+          status=$?
+          set -e
+
+          if [ $status -ne 0 ]; then
+            echo "Initial package run exited with code $status. Checking if Data seed generation is required..."
+            DATA_SEED_TOOL=$(find ../UniXNU/out -name "make-macos-data-seed.py" 2>/dev/null | head -n 1 || true)
+            OS_DMG=$(find ../UniXNU/out/ipsw -name "*.dmg" ! -name "*.aea" 2>/dev/null | head -n 1 || true)
+            RUNTIME_DIR=$(find ../UniXNU/out -type d -name "runtime" 2>/dev/null | head -n 1 || true)
+
+            if [ -n "$DATA_SEED_TOOL" ] && [ -n "$OS_DMG" ] && [ -n "$RUNTIME_DIR" ] && [ ! -f "$RUNTIME_DIR/data.dbr" ]; then
+              echo "== Found OS image: $OS_DMG"
+              echo "== Creating first-install macOS Data seed using sudo..."
+              mkdir -p "$RUNTIME_DIR"
+              sudo python3 "$DATA_SEED_TOOL" "$OS_DMG" "$RUNTIME_DIR/data.dbr" --gib 210 --skip-setup
+              echo "== Data seed created at $RUNTIME_DIR/data.dbr. Resuming package build..."
+              scripts/package.sh --os "${{ inputs.os }}" --uefi ../uefi-sheng
+            else
+              echo "Error: package.sh failed and could not automatically resolve inputs." >&2
+              exit $status
+            fi
+          fi
 
       - name: Build userdata image (optional)
         if: inputs.include_userdata
