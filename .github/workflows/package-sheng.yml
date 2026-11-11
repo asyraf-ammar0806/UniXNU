@@ -1,0 +1,115 @@
+name: Package Xiaomi Pad 6S Pro (sheng)
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "OS profile"
+        type: choice
+        options:
+          - "macos-27"
+          - "27"
+          - "26"
+          - "17"
+        default: "macos-27"
+      unique_chip_id:
+        description: "Platform seed / Chip ID (8 hex digits)"
+        required: true
+        default: "1c70f6b4"
+      include_userdata:
+        description: "Also build userdata image (takes additional time and disk)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-sheng-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: macos-26
+    timeout-minutes: 180
+    steps:
+      - name: Check out UniXNU
+        uses: actions/checkout@v4
+        with:
+          path: UniXNU
+          submodules: recursive
+
+      - name: Check out UniXNU-sheng
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/UniXNU-sheng
+          path: device
+          submodules: recursive
+
+      - name: Check out uefi-sheng
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/uefi-sheng
+          path: uefi-sheng
+          submodules: recursive
+
+      - name: Install build tools
+        run: |
+          brew install dtc llvm lld cmake mtools blacktop/tap/ipsw
+          ok=1
+          for t in clang xcodebuild make git ninja cmake dtc fdtget fdtput aea compression_tool \
+                   mformat mcopy ipsw; do
+            command -v "$t" >/dev/null || { echo "missing tool: $t"; ok=0; }
+          done
+          for t in lld-link llvm-lib llvm-rc llvm-nm llvm-objcopy; do
+            [ -f "/opt/homebrew/opt/llvm/bin/$t" ] || [ -f "/opt/homebrew/opt/lld/bin/$t" ] || { echo "missing tool: $t"; ok=0; }
+          done
+          [ "$ok" = 1 ]
+
+      - name: Validate platform seed
+        env:
+          SEED: ${{ inputs.unique_chip_id || secrets.UNIXNU_UNIQUE_CHIP_ID }}
+        run: |
+          if ! [[ "$SEED" =~ ^[0-9a-fA-F]{8}$ ]]; then
+            echo "Error: platform seed must be an 8-digit hex value (e.g. 1c70f6b4)" >&2
+            exit 1
+          fi
+
+      - name: Package boot & payload images
+        working-directory: device
+        env:
+          UNIXNU_UNIQUE_CHIP_ID: ${{ inputs.unique_chip_id || secrets.UNIXNU_UNIQUE_CHIP_ID }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          scripts/package.sh --os "${{ inputs.os }}" --uefi ../uefi-sheng
+
+      - name: Build userdata image (optional)
+        if: inputs.include_userdata
+        working-directory: UniXNU
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ./unixnu build userdata --os "${{ inputs.os }}" -D ../device
+
+      - name: Upload Boot & Payload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sheng-${{ inputs.os }}-boot-images
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            UniXNU/out/sheng/*/*/boot/boot.img
+            UniXNU/out/sheng/*/*/payload/payload.img
+            UniXNU/out/sheng/*/*/kernel/kernel.macho
+            UniXNU/out/sheng/*/*/package.manifest.json
+
+      - name: Upload Userdata Artifact (if built)
+        if: inputs.include_userdata
+        uses: actions/upload-artifact@v4
+        with:
+          name: sheng-${{ inputs.os }}-userdata
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            UniXNU/out/sheng/*/*/userdata/userdata-root.img
+            UniXNU/out/sheng/*/*/userdata/userdata-root.json
